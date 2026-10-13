@@ -30,7 +30,6 @@ const refreshSessionSchema = new Schema<IRefreshSessionDocument>(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
     isRevoked: {
       type: Boolean,
