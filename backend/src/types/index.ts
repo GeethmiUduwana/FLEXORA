@@ -20,6 +20,17 @@ export enum MembershipStatus {
   PENDING = 'PENDING'
 }
 
+export enum BusinessStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED'
+}
+
+export enum CategoryStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE'
+}
+
 export interface AccessTokenPayload {
   userId: string;
   email: string;

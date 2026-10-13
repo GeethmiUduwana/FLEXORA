@@ -18,6 +18,17 @@ export enum MembershipStatus {
   PENDING = 'PENDING'
 }
 
+export enum BusinessStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED'
+}
+
+export enum CategoryStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE'
+}
+
 export interface IUser {
   id: string;
   email: string;
@@ -27,6 +38,57 @@ export interface IUser {
   status: AccountStatus;
   isEmailVerified: boolean;
   lastLoginAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IBusinessCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  icon?: string;
+  status: CategoryStatus;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IBusinessType {
+  id: string;
+  name: string;
+  slug: string;
+  categoryId: string;
+  description?: string;
+  status: CategoryStatus;
+  isCustom: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IBusiness {
+  id: string;
+  name: string;
+  slug: string;
+  ownerId: string;
+  categoryId: string;
+  category?: IBusinessCategory;
+  businessTypeId?: string | null;
+  businessType?: IBusinessType | null;
+  customBusinessType?: string | null;
+  description: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  website?: string | null;
+  logo?: string | null;
+  employeeCount?: number;
+  customerCount?: number;
+  mainServices?: string[];
+  productsSold?: string[];
+  onlineBookingRequired: boolean;
+  onlinePaymentsRequired: boolean;
+  status: BusinessStatus;
   createdAt: string;
   updatedAt: string;
 }

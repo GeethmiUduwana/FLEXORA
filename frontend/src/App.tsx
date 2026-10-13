@@ -19,6 +19,8 @@ import { ProfilePage } from './pages/ProfilePage.js';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage.js';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage.js';
 import { BusinessDashboardPage } from './pages/business/BusinessDashboardPage.js';
+import { BusinessSetupPage } from './pages/business/BusinessSetupPage.js';
+import { BusinessSettingsPage } from './pages/business/BusinessSettingsPage.js';
 import { ManagerDashboardPage } from './pages/manager/ManagerDashboardPage.js';
 import { StaffDashboardPage } from './pages/staff/StaffDashboardPage.js';
 
@@ -234,6 +236,30 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={[UserRole.BUSINESS_OWNER]}>
               <BusinessDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/business/setup"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.BUSINESS_OWNER]}>
+              <BusinessSetupPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/business/setup/review"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.BUSINESS_OWNER]}>
+              <BusinessSetupPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/business/settings"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.BUSINESS_OWNER]}>
+              <BusinessSettingsPage />
             </ProtectedRoute>
           }
         />

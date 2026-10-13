@@ -1,40 +1,161 @@
-# Flexora System Builder — Module 1: Authentication & RBAC
+# Flexora System Builder — Multi-Tenant SaaS Platform
 
-**Flexora System Builder** is a modular, multi-tenant business platform where business owners create and manage custom business systems by selecting modules and building their website presence.
+**Flexora System Builder** is a modular, multi-tenant SaaS business platform where business owners register their businesses, describe operations, select tailored modules, and build their online web presence.
 
-This repository implements **Step 1: Authentication and Role-Based Access Control (RBAC)**, establishing a hardened production foundation for multi-tenancy and user management.
+- **Step 1:** Authentication & Role-Based Access Control (RBAC) ✅
+- **Step 2:** Business Registration, Business Profile Management, Business Categories & Types ✅
 
 ---
 
 ## 1. Architecture Overview
 
 ### Technology Stack
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS / Vanilla CSS design tokens, Lucide React, React Hot Toast, Axios.
-- **Backend:** Node.js, Express, TypeScript, Mongoose, MongoDB, bcryptjs, jsonwebtoken, Zod, Helmet, Cookie-Parser, Express-Rate-Limit.
-- **Testing:** Vitest, Supertest.
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS / Flexora Design Tokens, Lucide React, React Hot Toast, Axios, React Router.
+- **Backend:** Node.js, Express, TypeScript, Mongoose, MongoDB Atlas / Local MongoDB, bcryptjs, jsonwebtoken, Zod, Helmet, Cookie-Parser, Express-Rate-Limit.
+- **Testing:** Vitest, Supertest (32 comprehensive unit and integration tests).
 
-### Key Security & Architectural Highlights
-- **Zero Plaintext Credentials:** Passwords hashed with bcrypt (salt rounds: 12).
-- **Silent Refresh & HttpOnly Cookies:** Short-lived access tokens (15m) kept strictly in memory. Long-lived refresh tokens (7d) stored in secure, `HttpOnly` cookies (`SameSite: Lax` / `Strict`).
-- **Token Rotation & Reuse Detection:** Every refresh call invalidates the existing refresh session and issues a new pair. If an already-revoked session is presented, the system treats it as an attempted breach and revokes all active sessions for that user.
-- **Multi-Tenant Foundation:** Pre-configured `BusinessMembership` model isolating user access by `tenantId`.
-- **Last Active Admin Protection:** Server-enforced prevention against demoting or deactivating the last active Platform Admin.
-- **Role Isolation:** Public registration is restricted to `BUSINESS_OWNER`. Platform Admin, Manager, and Staff roles cannot be self-assigned.
-
----
-
-## 2. User Roles & Capabilities
-
-| Role | Access | Dashboard Route | Capabilities |
-| :--- | :--- | :--- | :--- |
-| **Platform Admin** | Platform-wide | `/admin/dashboard` | View metrics, manage accounts, activate/suspend users, reassign roles, view roadmap placeholders. |
-| **Business Owner** | Tenant Owner | `/business/dashboard` | Manage business profile, workspace placeholder, team invitations (future), website builder (future). |
-| **Manager** | Business Staff | `/manager/dashboard` | Oversee assigned business operations and assigned workspaces. Restricted from admin APIs. |
-| **Staff** | Business Staff | `/staff/dashboard` | Access assigned workspace tasks. Restricted from administrative and owner operations. |
+### Visual Design System (Flexora Green Theme)
+- Primary Green: `#16845B`
+- Dark Green: `#0B3D2E`
+- Light Green: `#E8F5EE`
+- Background: `#F7FAF8`
+- Surface: `#FFFFFF`
+- Main Text: `#172B24`
+- Secondary Text: `#64756D`
+- Borders: `#DFE9E2`
 
 ---
 
-## 3. Getting Started & Installation
+## 2. Multi-Tenant Security & Isolation (Step 2)
+
+Multi-tenancy and data isolation are strictly enforced:
+- **Role Enforcement:** Only users with the `BUSINESS_OWNER` role can create businesses through `/api/v1/businesses`.
+- **Server-Side Ownership:** The `ownerId` is populated strictly from the authenticated server session token, completely ignoring any untrusted spoofed `ownerId` in request bodies.
+- **Strict Data Isolation:** A Business Owner can only view (`GET /businesses/:id`) and edit (`PATCH /businesses/:id`) businesses that they own. Any attempt to inspect or manipulate another owner's business returns `404 Not Found` (to prevent ID enumeration or leaking business existence) or `403 Forbidden`.
+- **Protected Fields:** Sensitive fields such as `ownerId`, `slug`, and `status` are strictly protected from modification through profile patch requests.
+- **Category & Type Referential Integrity:** Backend cross-checks verify that the selected category and business type exist and are active, and that the selected business type belongs to the selected category.
+- **Custom Business Type Support:** When "Other / Custom Business" is selected or no predefined type matches, owners can register custom types without being forced into arbitrary categories.
+- **Membership Sync:** Registering a business synchronizes tenant ownership into `BusinessMembership`, laying the architectural foundation for Step 5 Team Management (Managers and Staff).
+
+---
+
+## 3. Data Models
+
+### BusinessCategory Model (`backend/src/models/BusinessCategory.ts`)
+| Field | Type | Details |
+| :--- | :--- | :--- |
+| `name` | String | Unique category title (e.g. "Professional Services", "Health & Wellness") |
+| `slug` | String | Unique URL slug indexed for lookups |
+| `description` | String | Optional category summary |
+| `icon` | String | Optional icon identifier |
+| `status` | Enum | `ACTIVE` or `INACTIVE` |
+| `displayOrder` | Number | Sorting order for onboarding display |
+| `createdAt`, `updatedAt` | Date | Timestamps |
+
+### BusinessType Model (`backend/src/models/BusinessType.ts`)
+| Field | Type | Details |
+| :--- | :--- | :--- |
+| `name` | String | Subcategory / business type title (e.g. "Consulting", "Dental Clinic") |
+| `slug` | String | Subcategory slug |
+| `categoryId` | ObjectId | Reference to `BusinessCategory` (indexed) |
+| `description` | String | Optional description |
+| `status` | Enum | `ACTIVE` or `INACTIVE` |
+| `isCustom` | Boolean | True if custom / open-ended |
+| `createdAt`, `updatedAt` | Date | Compound index: `{ categoryId: 1, slug: 1 }` |
+
+### Business Model (`backend/src/models/Business.ts`)
+| Field | Type | Details |
+| :--- | :--- | :--- |
+| `name` | String | Business trading name (indexed) |
+| `slug` | String | Unique URL identifier with collision suffix loop |
+| `ownerId` | ObjectId | Reference to `User` (indexed for multi-tenant isolation) |
+| `categoryId` | ObjectId | Reference to `BusinessCategory` |
+| `businessTypeId` | ObjectId | Reference to `BusinessType` (optional if custom) |
+| `customBusinessType` | String | Custom type text when selecting custom options |
+| `description` | String | Business profile summary |
+| `email`, `phone`, `address`, `website`, `logo` | String | Optional contact and branding details |
+| `employeeCount`, `customerCount` | Number | Operational metrics |
+| `mainServices`, `productsSold` | Array<String> | Offerings catalog |
+| `onlineBookingRequired`, `onlinePaymentsRequired` | Boolean | Feature flags guiding Step 3 module selection |
+| `status` | Enum | `ACTIVE`, `INACTIVE`, `SUSPENDED` |
+| `createdAt`, `updatedAt` | Date | Timestamps |
+
+---
+
+## 4. Business Registration Workflow
+
+The frontend provides an interactive, responsive 3-step registration wizard at `/business/setup` and `/business/setup/review`:
+
+1. **Step 1 — Business Details:**
+   - Business Name *(required, min 2 chars)*
+   - Business Category *(required, fetched dynamically from MongoDB)*
+   - Business Type *(required, filtered dynamically by chosen category)*
+   - Custom Business Type *(conditional, required only when Custom / Other is chosen)*
+   - Business Description *(required, min 10 chars)*
+   - Optional fields: Email, Phone, Address, Website URL, Logo URL.
+2. **Step 2 — Business Operations:**
+   - Number of Employees *(optional, non-negative)*
+   - Approximate Monthly Customers *(optional, non-negative)*
+   - Main Services & Products Sold *(optional comma-separated lists)*
+   - Online Booking Required? *(Yes / No switch)*
+   - Online Payments Required? *(Yes / No switch)*
+3. **Step 3 — Review & Confirm (`/business/setup/review`):**
+   - Clean summary card showing all entered details and preferences.
+   - Jump back to any previous step with "Edit" buttons or direct step navigation.
+   - Prevents duplicate submissions with inline loading spinners.
+   - Automatic draft saving to `localStorage` prevents data loss on page refresh.
+   - On successful submission, clears draft and redirects to `/business/dashboard`.
+
+---
+
+## 5. API Reference (`/api/v1`)
+
+### Business Categories & Types
+- `GET /api/v1/business-categories` — List all active categories sorted by display order.
+- `GET /api/v1/business-categories/:id/types` — List active business types for a given category.
+
+### Business Management (Requires `BUSINESS_OWNER` role)
+- `POST /api/v1/businesses` — Register a business for the authenticated owner.
+- `GET /api/v1/businesses/my` — List all businesses owned by the authenticated owner.
+- `GET /api/v1/businesses/:id` — Get single business details (strictly verified for owner or platform admin).
+- `PATCH /api/v1/businesses/:id` — Update permitted profile fields (ownership verified).
+
+### Authentication & RBAC (Step 1)
+- `POST /api/v1/auth/register` — Public registration (Business Owner role).
+- `POST /api/v1/auth/login` — Login with credentials, issues JWT & HttpOnly refresh cookie.
+- `POST /api/v1/auth/refresh` — Refresh token rotation.
+- `POST /api/v1/auth/logout` / `logout-all` — Revoke sessions.
+- `GET /api/v1/auth/me` — Authenticated user identity.
+- `POST /api/v1/auth/forgot-password` / `reset-password` — Password recovery.
+
+### Platform Administration (Requires `PLATFORM_ADMIN` role)
+- `GET /api/v1/admin/dashboard` — Platform metrics.
+- `GET /api/v1/admin/users` — Paginated user directory with status and role management.
+- `PATCH /api/v1/admin/users/:id/status` / `role` — Account state updates.
+
+---
+
+## 6. Frontend Routes
+
+| Route | Role Access | Description |
+| :--- | :--- | :--- |
+| `/` | Public | Public landing page and feature highlights. |
+| `/login` | Public | Sign in form. |
+| `/register` | Public | Register a new Business Owner account. |
+| `/dashboard` | Authenticated | Smart router dispatching to role-specific dashboard. |
+| `/business/setup` | Business Owner | Multi-step business registration wizard (Steps 1 & 2). |
+| `/business/setup/review`| Business Owner | Step 3: Review and confirmation before creation. |
+| `/business/dashboard`| Business Owner | Business dashboard displaying profile, completion %, and Step 3 module placeholder. |
+| `/business/settings` | Business Owner | Edit and manage business profile details. |
+| `/admin/dashboard` | Platform Admin | System administrator metrics. |
+| `/admin/users` | Platform Admin | Admin user management table. |
+| `/manager/dashboard` | Manager | Manager workspace dashboard. |
+| `/staff/dashboard` | Staff | Staff operations dashboard. |
+| `/profile` | Authenticated | User account details and security settings. |
+
+---
+
+## 7. Getting Started & Installation
 
 ### Prerequisites
 - Node.js (v20+ recommended)
@@ -46,148 +167,90 @@ From the repository root:
 ```powershell
 npm install
 ```
-*(A project-level `.npmrc` is configured with a high-availability registry mirror and fetch retries to seamlessly work behind corporate firewalls).*
-
----
 
 ### Step 2: Environment Configuration
-
-#### Backend Environment
-Copy the example environment file if you haven't already:
+Copy environment files:
 ```powershell
 Copy-Item backend\.env.example backend\.env
+Copy-Item frontend\.env.example frontend\.env
 ```
 
-Open `backend/.env` and update the database URI:
+Ensure `backend/.env` has:
 ```env
 PORT=5000
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
-
-# Replace with your MongoDB connection string (Atlas or Local):
 MONGODB_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/flexora
-
-# Cryptographically strong secrets (pre-generated during initial setup):
-JWT_SECRET=1625f984453cce6a9de8d86972e042869fceec61e558846fdb4def94651aa8d3
-JWT_REFRESH_SECRET=1625f984453cce6a9de8d86972e042869fceec61e558846fdb4def94651aa8d3
+JWT_SECRET=your_jwt_secret
+JWT_REFRESH_SECRET=your_jwt_refresh_secret
 ACCESS_TOKEN_EXPIRES_IN=15m
 REFRESH_TOKEN_EXPIRES_IN=7d
 ```
 
-#### Frontend Environment (Optional)
-```powershell
-Copy-Item frontend\.env.example frontend\.env
-```
-Default `VITE_API_URL` is `http://localhost:5000/api/v1`.
-
----
-
-### Step 3: Seed Development Users
-Once your `MONGODB_URI` is connected, seed the initial Platform Admin and demo accounts for all 4 roles:
-
+### Step 3: Seed Database
+Seed default users, 9 standard business categories, and 72 predefined business types idempotently:
 ```powershell
 npm run seed
 ```
 
-#### Available Seed Accounts:
+#### Demo User Accounts:
 | Role | Email | Password |
 | :--- | :--- | :--- |
-| **Platform Admin** | `admin@flexora.com` | `Admin@123456` |
 | **Business Owner** | `owner@flexora.com` | `Owner@123456` |
+| **Platform Admin** | `admin@flexora.com` | `Admin@123456` |
 | **Manager** | `manager@flexora.com` | `Manager@123456` |
 | **Staff** | `staff@flexora.com` | `Staff@123456` |
 
----
-
 ### Step 4: Run the Application
-Start both the Vite frontend and the Express backend simultaneously:
+Start frontend and backend concurrently:
 ```powershell
 npm run dev
 ```
-
-- **Frontend:** [http://localhost:5173](http://localhost:5173)
-- **Backend API:** [http://localhost:5000](http://localhost:5000)
-- **Backend Health Check:** [http://localhost:5000/api/health](http://localhost:5000/api/health)
+- Frontend: [http://localhost:5173](http://localhost:5173)
+- Backend: [http://localhost:5000](http://localhost:5000)
 
 ---
 
-## 4. Running Automated Tests
+## 8. Running Automated Tests
 
-Run the backend integration test suite with Vitest and Supertest:
+Run all unit and integration test suites:
 ```powershell
 npm test
 ```
 
-### Test Coverage Includes:
-- Business Owner public registration validation.
-- Duplicate email collision rejection (HTTP 409).
-- Password complexity enforcement.
-- Credential validation and HttpOnly cookie generation on login.
-- Account suspension blocking access.
-- RBAC enforcement (Business Owners, Managers, and Staff blocked from Admin APIs with 403 Forbidden).
-- Platform Admin authorized access.
-- Prevention of self-privilege escalation through profile updates.
-- Safeguard preventing accidental demotion of the last active Platform Admin.
-- Silent refresh token rotation and revocation.
-- Reuse detection revoking all active sessions upon compromise.
-- Password reset token hashing and expiration verification.
+### Verified Test Suites (32 Tests Passing):
+1. **`auth.test.ts` (14 tests):**
+   - Registration validation and role restrictions.
+   - Login credential checks and HttpOnly cookies.
+   - Account suspension blocking.
+   - RBAC enforcement across roles.
+   - Last active platform admin protection.
+   - Token rotation, revocation, and reuse detection.
+   - Password reset workflow.
+2. **`business.test.ts` (18 tests):**
+   - Category and business type listing.
+   - Category-filtered business types.
+   - 404 handling for non-existent categories.
+   - Authenticated business creation by Business Owner.
+   - Rejecting unauthenticated business creation (401).
+   - Rejecting Managers and Staff from owner creation workflow (403).
+   - Server-enforced `ownerId` preventing spoofing.
+   - Required field validation (name, description, category).
+   - Rejecting invalid or inactive categories.
+   - Rejecting business types belonging to mismatched categories.
+   - Custom business type registration.
+   - Collision-safe unique slug generation loop.
+   - Owner retrieving their owned businesses via `GET /businesses/my`.
+   - Owner retrieving specific business by ID.
+   - Rejecting another owner from reading private businesses (404/403).
+   - Owner updating permitted profile fields via `PATCH /businesses/:id`.
+   - Rejecting another owner from updating private businesses (403).
+   - Protecting `ownerId` and `status` from modification.
 
 ---
 
-## 5. API Reference (`/api/v1`)
+## 9. Known Limitations & Roadmap
 
-### Authentication
-- `POST /api/v1/auth/register` — Public registration (Business Owner only).
-- `POST /api/v1/auth/login` — Login with email and password.
-- `POST /api/v1/auth/refresh` — Rotate refresh token from HttpOnly cookie.
-- `POST /api/v1/auth/logout` — Revoke active refresh session.
-- `POST /api/v1/auth/logout-all` — Revoke all active sessions for current user.
-- `GET /api/v1/auth/me` — Get current authenticated user.
-- `POST /api/v1/auth/forgot-password` — Generate secure password reset token.
-- `POST /api/v1/auth/reset-password` — Set new password with valid token.
-
-### User Profile
-- `GET /api/v1/users/me` — Retrieve current user profile.
-- `PATCH /api/v1/users/me` — Update first and last name (strict role protection).
-- `PATCH /api/v1/users/me/password` — Change password.
-
-### Platform Administration (Requires `PLATFORM_ADMIN` role)
-- `GET /api/v1/admin/dashboard` — Platform statistics and roadmap placeholders.
-- `GET /api/v1/admin/users` — Paginated user list with search, role, and status filters.
-- `GET /api/v1/admin/users/:id` — User details.
-- `PATCH /api/v1/admin/users/:id/status` — Activate, deactivate, or suspend account.
-- `PATCH /api/v1/admin/users/:id/role` — Reassign user role (with last-admin protection).
-
----
-
-## 6. Frontend Routes
-
-| Route | Access | Description |
-| :--- | :--- | :--- |
-| `/` | Public | Public marketing and landing page. |
-| `/login` | Public | Sign in form with password visibility toggle. |
-| `/register` | Public | Register a new Business Owner account. |
-| `/forgot-password`| Public | Password reset request with development mode preview link. |
-| `/reset-password` | Public | Set new password via token. |
-| `/dashboard` | Authenticated | Smart router that redirects users to their role-specific dashboard. |
-| `/admin/dashboard`| Platform Admin | Admin overview with metrics and roadmap placeholders. |
-| `/admin/users` | Platform Admin | User management table with role and status controls. |
-| `/business/dashboard` | Business Owner | Business workspace empty state and module placeholders. |
-| `/manager/dashboard` | Manager | Operations and assigned workspace empty state. |
-| `/staff/dashboard` | Staff | Staff workspace placeholder and profile links. |
-| `/profile` | Authenticated | Manage name, password, and active sessions. |
-| `/unauthorized` | Authenticated | Access-denied page for role mismatches. |
-
----
-
-## 7. Troubleshooting
-
-- **MongoDB Connection Error (`querySrv ECONNREFUSED` or `ECONNREFUSED`):**
-  Ensure you have replaced `YOUR_CLUSTER.mongodb.net` in [`backend/.env`](file:///c:/Internship%20SLT/FLEXORA-starter/FLEXORA/backend/.env) with your actual MongoDB Atlas cluster connection string or a local MongoDB server (`mongodb://127.0.0.1:27017/flexora`).
-- **Firewall / NPM Proxy Issues:**
-  The project includes `.npmrc` configured to use `https://registry.npmmirror.com` with `strict-ssl=false` and fetch retries to bypass corporate firewall restrictions.
-- **Port Conflict (Port 5000 or 5173 in use):**
-  Kill conflicting Node processes:
-  ```powershell
-  Get-Process -Name node | Stop-Process -Force
-  ```
+- **Step 3 (Upcoming):** Admin Category Management and Module Marketplace. Dynamic recommendations based on category and operational flags (e.g. online booking and payment flags) will be enabled in Step 3.
+- **Step 4 (Upcoming):** Drag-and-drop Visual Website Builder.
+- **Step 5 (Upcoming):** Team Management (inviting Managers and Staff to specific business tenants).
