@@ -18,6 +18,11 @@ import { ProfilePage } from './pages/ProfilePage.js';
 // Role Dashboards
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage.js';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage.js';
+import { AdminCategoriesPage } from './pages/admin/AdminCategoriesPage.js';
+import { AdminBusinessTypesPage } from './pages/admin/AdminBusinessTypesPage.js';
+import { AdminModuleCategoriesPage } from './pages/admin/AdminModuleCategoriesPage.js';
+import { AdminModulesPage } from './pages/admin/AdminModulesPage.js';
+import { AdminModuleFormPage } from './pages/admin/AdminModuleFormPage.js';
 import { BusinessDashboardPage } from './pages/business/BusinessDashboardPage.js';
 import { BusinessSetupPage } from './pages/business/BusinessSetupPage.js';
 import { BusinessSettingsPage } from './pages/business/BusinessSettingsPage.js';
@@ -226,6 +231,54 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={[UserRole.PLATFORM_ADMIN]}>
               <AdminUsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/categories"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.PLATFORM_ADMIN]}>
+              <AdminCategoriesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/business-types"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.PLATFORM_ADMIN]}>
+              <AdminBusinessTypesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/module-categories"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.PLATFORM_ADMIN]}>
+              <AdminModuleCategoriesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/modules"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.PLATFORM_ADMIN]}>
+              <AdminModulesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/modules/create"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.PLATFORM_ADMIN]}>
+              <AdminModuleFormPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/modules/:id/edit"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.PLATFORM_ADMIN]}>
+              <AdminModuleFormPage />
             </ProtectedRoute>
           }
         />

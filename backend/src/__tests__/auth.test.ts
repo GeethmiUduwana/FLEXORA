@@ -7,6 +7,7 @@ import { BusinessMembership } from '../models/BusinessMembership.js';
 import { UserRole, AccountStatus } from '../types/index.js';
 import bcrypt from 'bcryptjs';
 import { signAccessToken } from '../utils/jwt.js';
+import { AdminService } from '../services/admin.service.js';
 
 describe('Flexora Auth & RBAC API Test Suite', () => {
   beforeEach(() => {
@@ -219,9 +220,9 @@ describe('Flexora Auth & RBAC API Test Suite', () => {
         isEmailVerified: true,
       } as any);
 
-      vi.spyOn(User, 'countDocuments').mockResolvedValue(10 as any);
-      vi.spyOn(User, 'find').mockReturnValue({
-        sort: () => ({ limit: () => ({ select: () => Promise.resolve([]) }) }),
+      vi.spyOn(AdminService, 'getDashboardStats').mockResolvedValue({
+        stats: { totalUsers: 10, activeUsers: 8 } as any,
+        recentUsers: [],
       } as any);
 
       const res = await request(app)

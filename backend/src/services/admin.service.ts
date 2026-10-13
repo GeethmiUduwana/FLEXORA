@@ -1,6 +1,10 @@
 import { User } from '../models/User.js';
 import { RefreshSession } from '../models/RefreshSession.js';
-import { UserRole, AccountStatus } from '../types/index.js';
+import { BusinessCategory } from '../models/BusinessCategory.js';
+import { BusinessType } from '../models/BusinessType.js';
+import { ModuleCategory } from '../models/ModuleCategory.js';
+import { BusinessModule } from '../models/BusinessModule.js';
+import { UserRole, AccountStatus, CategoryStatus, ModuleStatus } from '../types/index.js';
 
 export class AdminService {
   static async getDashboardStats() {
@@ -14,6 +18,18 @@ export class AdminService {
       suspendedUsers,
       pendingUsers,
       recentUsers,
+      totalBusinessCategories,
+      activeBusinessCategories,
+      totalBusinessTypes,
+      totalModuleCategories,
+      totalModules,
+      activeModules,
+      inactiveModules,
+      archivedModules,
+      modulesWithDependencies,
+      modulesWithoutRecommendations,
+      recentModules,
+      modulesByCategoryGroup,
     ] = await Promise.all([
       User.countDocuments({}),
       User.countDocuments({ status: AccountStatus.ACTIVE }),
@@ -24,6 +40,35 @@ export class AdminService {
       User.countDocuments({ status: AccountStatus.SUSPENDED }),
       User.countDocuments({ status: AccountStatus.PENDING_VERIFICATION }),
       User.find({}).sort({ createdAt: -1 }).limit(5).select('-passwordHash'),
+      BusinessCategory.countDocuments({}),
+      BusinessCategory.countDocuments({ status: CategoryStatus.ACTIVE }),
+      BusinessType.countDocuments({}),
+      ModuleCategory.countDocuments({}),
+      BusinessModule.countDocuments({}),
+      BusinessModule.countDocuments({ status: ModuleStatus.ACTIVE }),
+      BusinessModule.countDocuments({ status: ModuleStatus.INACTIVE }),
+      BusinessModule.countDocuments({ status: ModuleStatus.ARCHIVED }),
+      BusinessModule.countDocuments({ 'dependencies.0': { $exists: true } }),
+      BusinessModule.countDocuments({ 'recommendedBusinessTypes.0': { $exists: false } }),
+      BusinessModule.find({})
+        .populate('moduleCategoryId', 'name slug')
+        .sort({ updatedAt: -1 })
+        .limit(6),
+      BusinessModule.aggregate([
+        { $match: { status: { $ne: ModuleStatus.ARCHIVED } } },
+        { $group: { _id: '$moduleCategoryId', count: { $sum: 1 } } },
+        {
+          $lookup: {
+            from: 'modulecategories',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'category',
+          },
+        },
+        { $unwind: '$category' },
+        { $project: { _id: 1, name: '$category.name', count: 1 } },
+        { $sort: { count: -1 } },
+      ]),
     ]);
 
     return {
@@ -36,13 +81,20 @@ export class AdminService {
         platformAdmins,
         suspendedUsers,
         pendingUsers,
+        totalBusinessCategories,
+        activeBusinessCategories,
+        totalBusinessTypes,
+        totalModuleCategories,
+        totalModules,
+        activeModules,
+        inactiveModules,
+        archivedModules,
+        modulesWithDependencies,
+        modulesWithoutRecommendations,
       },
       recentUsers: recentUsers.map((u) => u.toSafeJSON()),
-      placeholders: {
-        categories: { status: 'NOT_IMPLEMENTED', message: 'Category management will be available in Step 2' },
-        businessTypes: { status: 'NOT_IMPLEMENTED', message: 'Business type configuration will be available in Step 2' },
-        modules: { status: 'NOT_IMPLEMENTED', message: 'Module marketplace configuration will be available in Step 3' },
-      },
+      recentModules: recentModules.map((m) => m.toSafeJSON()),
+      modulesByCategoryGroup,
     };
   }
 

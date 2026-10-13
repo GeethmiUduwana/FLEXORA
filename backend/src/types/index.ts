@@ -31,6 +31,21 @@ export enum CategoryStatus {
   INACTIVE = 'INACTIVE'
 }
 
+export enum ModuleStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  ARCHIVED = 'ARCHIVED'
+}
+
+export enum AuditAction {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  STATUS_CHANGE = 'STATUS_CHANGE',
+  DEPENDENCIES_UPDATE = 'DEPENDENCIES_UPDATE',
+  RECOMMENDATIONS_UPDATE = 'RECOMMENDATIONS_UPDATE',
+  DELETE = 'DELETE'
+}
+
 export interface AccessTokenPayload {
   userId: string;
   email: string;

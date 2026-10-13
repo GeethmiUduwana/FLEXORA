@@ -4,6 +4,7 @@
 
 - **Step 1:** Authentication & Role-Based Access Control (RBAC) ✅
 - **Step 2:** Business Registration, Business Profile Management, Business Categories & Types ✅
+- **Step 3:** Platform Admin Category, Business Type & Module Management ✅
 
 ---
 
@@ -12,7 +13,7 @@
 ### Technology Stack
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS / Flexora Design Tokens, Lucide React, React Hot Toast, Axios, React Router.
 - **Backend:** Node.js, Express, TypeScript, Mongoose, MongoDB Atlas / Local MongoDB, bcryptjs, jsonwebtoken, Zod, Helmet, Cookie-Parser, Express-Rate-Limit.
-- **Testing:** Vitest, Supertest (32 comprehensive unit and integration tests).
+- **Testing:** Vitest, Supertest (51 comprehensive unit and integration tests across 3 test suites).
 
 ### Visual Design System (Flexora Green Theme)
 - Primary Green: `#16845B`
@@ -26,144 +27,142 @@
 
 ---
 
-## 2. Multi-Tenant Security & Isolation (Step 2)
+## 2. Platform Admin Architecture & Access Control (Step 3)
 
-Multi-tenancy and data isolation are strictly enforced:
-- **Role Enforcement:** Only users with the `BUSINESS_OWNER` role can create businesses through `/api/v1/businesses`.
-- **Server-Side Ownership:** The `ownerId` is populated strictly from the authenticated server session token, completely ignoring any untrusted spoofed `ownerId` in request bodies.
-- **Strict Data Isolation:** A Business Owner can only view (`GET /businesses/:id`) and edit (`PATCH /businesses/:id`) businesses that they own. Any attempt to inspect or manipulate another owner's business returns `404 Not Found` (to prevent ID enumeration or leaking business existence) or `403 Forbidden`.
-- **Protected Fields:** Sensitive fields such as `ownerId`, `slug`, and `status` are strictly protected from modification through profile patch requests.
-- **Category & Type Referential Integrity:** Backend cross-checks verify that the selected category and business type exist and are active, and that the selected business type belongs to the selected category.
-- **Custom Business Type Support:** When "Other / Custom Business" is selected or no predefined type matches, owners can register custom types without being forced into arbitrary categories.
-- **Membership Sync:** Registering a business synchronizes tenant ownership into `BusinessMembership`, laying the architectural foundation for Step 5 Team Management (Managers and Staff).
+### Role & Endpoint Protection
+- **Role Enforcement:** All administrative routes under `/api/v1/admin/*` and `/admin/*` require the `PLATFORM_ADMIN` role enforced by `requireAuth` and `requirePlatformAdmin` middleware.
+- **Unauthorized Role Blocking:** Requests from Business Owners, Managers, and Staff to admin endpoints are rejected with `403 Forbidden`.
+- **Audit Logging:** Administrative changes to business categories, business types, module categories, and modules are logged in `AuditLog` with `adminId`, action, entity type, entity ID, and non-sensitive change details.
+
+### Business Category & Type Management
+- **Safe Deletion Policy:** Categories and business types cannot be deleted if referenced by existing business types or active businesses. Administrators are prompted to deactivate/archive them instead to preserve historical tenant integrity.
+- **Taxonomy Referential Integrity:** Assigning or editing business types enforces that the selected category exists and is active.
+
+### Reusable Module Catalog & Dependency Graph
+- **Catalog Separation:** Module definitions, pricing, prerequisites, and recommendation mappings are configuration-driven, cleanly decoupled from functional implementation.
+- **Dependency Cycle Prevention (`dependencyGraph.ts`):** Directed Acyclic Graph (DAG) cycle detection via Depth-First Search (DFS) prevents:
+  - Self-dependencies (Module A cannot depend on Module A).
+  - Duplicate dependencies.
+  - References to missing or archived modules.
+  - Direct circular dependencies (A → B, preventing B → A).
+  - Indirect circular dependencies (A → B → C, preventing C → A).
+- **Pricing & Annual Savings:** Validates non-negative monthly and yearly prices on the server. Calculates annual savings preview (`monthlyPrice × 12 − yearlyPrice`).
+- **Recommended Business Types:** Links modules to advisory business types in MongoDB to inform upcoming Step 4 recommendations.
 
 ---
 
 ## 3. Data Models
 
-### BusinessCategory Model (`backend/src/models/BusinessCategory.ts`)
+### ModuleCategory Model (`backend/src/models/ModuleCategory.ts`)
 | Field | Type | Details |
 | :--- | :--- | :--- |
-| `name` | String | Unique category title (e.g. "Professional Services", "Health & Wellness") |
+| `name` | String | Module category title (e.g. "Booking & Scheduling", "Finance") |
 | `slug` | String | Unique URL slug indexed for lookups |
-| `description` | String | Optional category summary |
-| `icon` | String | Optional icon identifier |
+| `description` | String | Category summary |
+| `icon` | String | Icon identifier |
 | `status` | Enum | `ACTIVE` or `INACTIVE` |
-| `displayOrder` | Number | Sorting order for onboarding display |
+| `displayOrder` | Number | Sorting order |
 | `createdAt`, `updatedAt` | Date | Timestamps |
 
-### BusinessType Model (`backend/src/models/BusinessType.ts`)
+### BusinessModule Model (`backend/src/models/BusinessModule.ts`)
 | Field | Type | Details |
 | :--- | :--- | :--- |
-| `name` | String | Subcategory / business type title (e.g. "Consulting", "Dental Clinic") |
-| `slug` | String | Subcategory slug |
-| `categoryId` | ObjectId | Reference to `BusinessCategory` (indexed) |
-| `description` | String | Optional description |
-| `status` | Enum | `ACTIVE` or `INACTIVE` |
-| `isCustom` | Boolean | True if custom / open-ended |
-| `createdAt`, `updatedAt` | Date | Compound index: `{ categoryId: 1, slug: 1 }` |
-
-### Business Model (`backend/src/models/Business.ts`)
-| Field | Type | Details |
-| :--- | :--- | :--- |
-| `name` | String | Business trading name (indexed) |
-| `slug` | String | Unique URL identifier with collision suffix loop |
-| `ownerId` | ObjectId | Reference to `User` (indexed for multi-tenant isolation) |
-| `categoryId` | ObjectId | Reference to `BusinessCategory` |
-| `businessTypeId` | ObjectId | Reference to `BusinessType` (optional if custom) |
-| `customBusinessType` | String | Custom type text when selecting custom options |
-| `description` | String | Business profile summary |
-| `email`, `phone`, `address`, `website`, `logo` | String | Optional contact and branding details |
-| `employeeCount`, `customerCount` | Number | Operational metrics |
-| `mainServices`, `productsSold` | Array<String> | Offerings catalog |
-| `onlineBookingRequired`, `onlinePaymentsRequired` | Boolean | Feature flags guiding Step 3 module selection |
-| `status` | Enum | `ACTIVE`, `INACTIVE`, `SUSPENDED` |
+| `name` | String | Reusable module title |
+| `slug` | String | Unique URL slug |
+| `description` | String | Feature capability summary |
+| `icon` | String | Icon identifier |
+| `moduleCategoryId` | ObjectId | Reference to `ModuleCategory` |
+| `monthlyPrice` | Number | Non-negative monthly subscription cost |
+| `yearlyPrice` | Number | Non-negative yearly subscription cost |
+| `currency` | String | ISO Currency code (default: USD) |
+| `status` | Enum | `ACTIVE`, `INACTIVE`, `ARCHIVED` |
+| `dependencies` | Array<ObjectId> | Prerequisite modules (cycle-validated) |
+| `recommendedBusinessTypes` | Array<ObjectId> | Reference to recommended `BusinessType` records |
+| `displayOrder` | Number | Sorting order |
 | `createdAt`, `updatedAt` | Date | Timestamps |
 
----
-
-## 4. Business Registration Workflow
-
-The frontend provides an interactive, responsive 3-step registration wizard at `/business/setup` and `/business/setup/review`:
-
-1. **Step 1 — Business Details:**
-   - Business Name *(required, min 2 chars)*
-   - Business Category *(required, fetched dynamically from MongoDB)*
-   - Business Type *(required, filtered dynamically by chosen category)*
-   - Custom Business Type *(conditional, required only when Custom / Other is chosen)*
-   - Business Description *(required, min 10 chars)*
-   - Optional fields: Email, Phone, Address, Website URL, Logo URL.
-2. **Step 2 — Business Operations:**
-   - Number of Employees *(optional, non-negative)*
-   - Approximate Monthly Customers *(optional, non-negative)*
-   - Main Services & Products Sold *(optional comma-separated lists)*
-   - Online Booking Required? *(Yes / No switch)*
-   - Online Payments Required? *(Yes / No switch)*
-3. **Step 3 — Review & Confirm (`/business/setup/review`):**
-   - Clean summary card showing all entered details and preferences.
-   - Jump back to any previous step with "Edit" buttons or direct step navigation.
-   - Prevents duplicate submissions with inline loading spinners.
-   - Automatic draft saving to `localStorage` prevents data loss on page refresh.
-   - On successful submission, clears draft and redirects to `/business/dashboard`.
+### AuditLog Model (`backend/src/models/AuditLog.ts`)
+| Field | Type | Details |
+| :--- | :--- | :--- |
+| `adminId` | ObjectId | Reference to `User` |
+| `action` | String | `CREATE`, `UPDATE`, `STATUS_CHANGE`, `DELETE` |
+| `entityType` | String | Model modified |
+| `entityId` | String | ID of modified entity |
+| `details` | Object | Safe payload change details |
+| `createdAt` | Date | Timestamp |
 
 ---
 
-## 5. API Reference (`/api/v1`)
+## 4. API Reference (`/api/v1`)
 
-### Business Categories & Types
-- `GET /api/v1/business-categories` — List all active categories sorted by display order.
-- `GET /api/v1/business-categories/:id/types` — List active business types for a given category.
+### Platform Admin Management (Requires `PLATFORM_ADMIN` role)
+- `GET /api/v1/admin/dashboard` — Platform overview, user counts, module distribution, and diagnostics.
+- `GET /api/v1/admin/categories` — List business categories with associated business type counts.
+- `POST /api/v1/admin/categories` — Create business category.
+- `GET /api/v1/admin/categories/:id` — Get single category details.
+- `PATCH /api/v1/admin/categories/:id` — Update category details.
+- `PATCH /api/v1/admin/categories/:id/status` — Toggle category status.
+- `DELETE /api/v1/admin/categories/:id` — Safe deletion (blocked if referenced).
+- `GET /api/v1/admin/business-types` — List business types with category filters and business counts.
+- `POST /api/v1/admin/business-types` — Create business type.
+- `GET /api/v1/admin/business-types/:id` — Get single business type details.
+- `PATCH /api/v1/admin/business-types/:id` — Update business type.
+- `PATCH /api/v1/admin/business-types/:id/status` — Toggle business type status.
+- `DELETE /api/v1/admin/business-types/:id` — Safe deletion (blocked if used).
+- `GET /api/v1/admin/module-categories` — List module categories with module counts.
+- `POST /api/v1/admin/module-categories` — Create module category.
+- `GET /api/v1/admin/module-categories/:id` — Get single module category details.
+- `PATCH /api/v1/admin/module-categories/:id` — Update module category.
+- `PATCH /api/v1/admin/module-categories/:id/status` — Toggle module category status.
+- `DELETE /api/v1/admin/module-categories/:id` — Safe deletion (blocked if modules attached).
+- `GET /api/v1/admin/modules` — List reusable modules with category/price filters and sorting.
+- `POST /api/v1/admin/modules` — Create reusable module with pricing, dependencies, and recommendations.
+- `GET /api/v1/admin/modules/:id` — Get module details with populated references.
+- `PATCH /api/v1/admin/modules/:id` — Update module details, pricing, dependencies, and recommendations.
+- `PATCH /api/v1/admin/modules/:id/status` — Toggle module status (`ACTIVE`, `INACTIVE`, `ARCHIVED`).
+- `PATCH /api/v1/admin/modules/:id/dependencies` — Update dependencies (cycle-validated).
+- `PATCH /api/v1/admin/modules/:id/recommendations` — Update recommended business types.
+- `DELETE /api/v1/admin/modules/:id` — Safe deletion (blocked if other active modules depend on it).
+- `GET /api/v1/admin/users` — Paginated user directory.
+- `PATCH /api/v1/admin/users/:id/status` — Account status controls.
+- `PATCH /api/v1/admin/users/:id/role` — Role reassignment with last-admin protection.
 
-### Business Management (Requires `BUSINESS_OWNER` role)
-- `POST /api/v1/businesses` — Register a business for the authenticated owner.
-- `GET /api/v1/businesses/my` — List all businesses owned by the authenticated owner.
-- `GET /api/v1/businesses/:id` — Get single business details (strictly verified for owner or platform admin).
-- `PATCH /api/v1/businesses/:id` — Update permitted profile fields (ownership verified).
-
-### Authentication & RBAC (Step 1)
-- `POST /api/v1/auth/register` — Public registration (Business Owner role).
-- `POST /api/v1/auth/login` — Login with credentials, issues JWT & HttpOnly refresh cookie.
-- `POST /api/v1/auth/refresh` — Refresh token rotation.
-- `POST /api/v1/auth/logout` / `logout-all` — Revoke sessions.
-- `GET /api/v1/auth/me` — Authenticated user identity.
-- `POST /api/v1/auth/forgot-password` / `reset-password` — Password recovery.
-
-### Platform Administration (Requires `PLATFORM_ADMIN` role)
-- `GET /api/v1/admin/dashboard` — Platform metrics.
-- `GET /api/v1/admin/users` — Paginated user directory with status and role management.
-- `PATCH /api/v1/admin/users/:id/status` / `role` — Account state updates.
+### Business Owner & Tenant Operations (Step 2)
+- `GET /api/v1/business-categories` — Public / active business categories.
+- `GET /api/v1/business-categories/:id/types` — Active business types for selected category.
+- `POST /api/v1/businesses` — Register business workspace for authenticated owner.
+- `GET /api/v1/businesses/my` — List businesses owned by current user.
+- `GET /api/v1/businesses/:id` — Read single business (ownership verified).
+- `PATCH /api/v1/businesses/:id` — Update permitted profile fields.
 
 ---
 
-## 6. Frontend Routes
+## 5. Frontend Routes
 
 | Route | Role Access | Description |
 | :--- | :--- | :--- |
-| `/` | Public | Public landing page and feature highlights. |
-| `/login` | Public | Sign in form. |
-| `/register` | Public | Register a new Business Owner account. |
-| `/dashboard` | Authenticated | Smart router dispatching to role-specific dashboard. |
-| `/business/setup` | Business Owner | Multi-step business registration wizard (Steps 1 & 2). |
-| `/business/setup/review`| Business Owner | Step 3: Review and confirmation before creation. |
-| `/business/dashboard`| Business Owner | Business dashboard displaying profile, completion %, and Step 3 module placeholder. |
-| `/business/settings` | Business Owner | Edit and manage business profile details. |
-| `/admin/dashboard` | Platform Admin | System administrator metrics. |
-| `/admin/users` | Platform Admin | Admin user management table. |
-| `/manager/dashboard` | Manager | Manager workspace dashboard. |
-| `/staff/dashboard` | Staff | Staff operations dashboard. |
-| `/profile` | Authenticated | User account details and security settings. |
+| `/admin/dashboard` | Platform Admin | Live platform overview, metrics, module distribution, and diagnostics. |
+| `/admin/categories` | Platform Admin | Business category CRUD table with type counts and modal editors. |
+| `/admin/business-types` | Platform Admin | Business type CRUD table with category filters and business counts. |
+| `/admin/module-categories` | Platform Admin | Module category CRUD table with module counts. |
+| `/admin/modules` | Platform Admin | Reusable modules catalog with pricing, savings, prerequisites, and recommendation badges. |
+| `/admin/modules/create` | Platform Admin | Module creator with pricing calculator, dependency graph selector, and recommendation mapping. |
+| `/admin/modules/:id/edit` | Platform Admin | Module editor with dependency cycle detection. |
+| `/admin/users` | Platform Admin | User management directory with status and role controls. |
+| `/business/dashboard` | Business Owner | Business dashboard with profile completeness and upcoming module catalog placeholder. |
+| `/business/setup` | Business Owner | 3-step business registration wizard. |
+| `/business/settings` | Business Owner | Business profile settings. |
 
 ---
 
-## 7. Getting Started & Installation
+## 6. Getting Started & Installation
 
 ### Prerequisites
 - Node.js (v20+ recommended)
 - npm (v10+)
-- MongoDB Atlas cluster or a running local MongoDB instance (`mongodb://127.0.0.1:27017/flexora`)
+- MongoDB Atlas cluster or running local MongoDB instance (`mongodb://127.0.0.1:27017/flexora`)
 
 ### Step 1: Install Dependencies
-From the repository root:
 ```powershell
 npm install
 ```
@@ -188,7 +187,7 @@ REFRESH_TOKEN_EXPIRES_IN=7d
 ```
 
 ### Step 3: Seed Database
-Seed default users, 9 standard business categories, and 72 predefined business types idempotently:
+Seed default users, 9 business categories, 72 business types, 11 module categories, and 45+ reusable modules idempotently:
 ```powershell
 npm run seed
 ```
@@ -196,13 +195,13 @@ npm run seed
 #### Demo User Accounts:
 | Role | Email | Password |
 | :--- | :--- | :--- |
-| **Business Owner** | `owner@flexora.com` | `Owner@123456` |
 | **Platform Admin** | `admin@flexora.com` | `Admin@123456` |
+| **Business Owner** | `owner@flexora.com` | `Owner@123456` |
 | **Manager** | `manager@flexora.com` | `Manager@123456` |
 | **Staff** | `staff@flexora.com` | `Staff@123456` |
 
-### Step 4: Run the Application
-Start frontend and backend concurrently:
+### Step 4: Run Application
+Start both frontend and backend concurrently:
 ```powershell
 npm run dev
 ```
@@ -211,46 +210,32 @@ npm run dev
 
 ---
 
-## 8. Running Automated Tests
+## 7. Running Automated Tests
 
-Run all unit and integration test suites:
+Run the full automated test suite:
 ```powershell
 npm test
 ```
 
-### Verified Test Suites (32 Tests Passing):
-1. **`auth.test.ts` (14 tests):**
-   - Registration validation and role restrictions.
-   - Login credential checks and HttpOnly cookies.
-   - Account suspension blocking.
-   - RBAC enforcement across roles.
-   - Last active platform admin protection.
-   - Token rotation, revocation, and reuse detection.
-   - Password reset workflow.
-2. **`business.test.ts` (18 tests):**
-   - Category and business type listing.
-   - Category-filtered business types.
-   - 404 handling for non-existent categories.
-   - Authenticated business creation by Business Owner.
-   - Rejecting unauthenticated business creation (401).
-   - Rejecting Managers and Staff from owner creation workflow (403).
-   - Server-enforced `ownerId` preventing spoofing.
-   - Required field validation (name, description, category).
-   - Rejecting invalid or inactive categories.
-   - Rejecting business types belonging to mismatched categories.
-   - Custom business type registration.
-   - Collision-safe unique slug generation loop.
-   - Owner retrieving their owned businesses via `GET /businesses/my`.
-   - Owner retrieving specific business by ID.
-   - Rejecting another owner from reading private businesses (404/403).
-   - Owner updating permitted profile fields via `PATCH /businesses/:id`.
-   - Rejecting another owner from updating private businesses (403).
-   - Protecting `ownerId` and `status` from modification.
+### Verified Test Suites (51 Tests Passing):
+1. **`auth.test.ts` (14 tests):** Authentication, token rotation, and RBAC enforcement.
+2. **`business.test.ts` (18 tests):** Multi-tenant business registration, custom types, and isolation.
+3. **`admin.step3.test.ts` (19 tests):**
+   - Platform Admin role enforcement and unauthorized role blocking (401/403).
+   - Category CRUD and safe deletion blocking when types/businesses exist.
+   - Business type CRUD and inactive category validation.
+   - Module category CRUD and deletion blocking when modules exist.
+   - Reusable module creation, pricing validation, and annual savings.
+   - Self-dependency rejection (A → A).
+   - Duplicate dependency rejection.
+   - Direct circular dependency prevention (A → B → A).
+   - Indirect circular dependency prevention (A → B → C → A).
+   - Admin dashboard aggregated statistics.
 
 ---
 
-## 9. Known Limitations & Roadmap
+## 8. Known Limitations & Roadmap
 
-- **Step 3 (Upcoming):** Admin Category Management and Module Marketplace. Dynamic recommendations based on category and operational flags (e.g. online booking and payment flags) will be enabled in Step 3.
-- **Step 4 (Upcoming):** Drag-and-drop Visual Website Builder.
-- **Step 5 (Upcoming):** Team Management (inviting Managers and Staff to specific business tenants).
+- **Step 4 (Upcoming):** Customer Module Selection, Recommendation Engine, and Price Calculation for Business Owners.
+- **Step 5 (Upcoming):** Visual Drag-and-Drop Website Builder.
+- **Step 6 (Upcoming):** Team & Role Delegation inside Business Tenants.

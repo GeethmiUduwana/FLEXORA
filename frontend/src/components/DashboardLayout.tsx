@@ -40,9 +40,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         return [
           { label: 'Admin Overview', path: '/admin/dashboard', icon: <LayoutDashboard size={18} /> },
           { label: 'User Management', path: '/admin/users', icon: <Users size={18} /> },
-          { label: 'Categories (Step 2)', path: '#categories', icon: <Layers size={18} />, isPlaceholder: true },
-          { label: 'Business Types (Step 2)', path: '#types', icon: <Briefcase size={18} />, isPlaceholder: true },
-          { label: 'Module Catalog (Step 3)', path: '#modules', icon: <Package size={18} />, isPlaceholder: true },
+          { label: 'Business Categories', path: '/admin/categories', icon: <Layers size={18} /> },
+          { label: 'Business Types', path: '/admin/business-types', icon: <Briefcase size={18} /> },
+          { label: 'Module Categories', path: '/admin/module-categories', icon: <Layers3 size={18} /> },
+          { label: 'Reusable Modules', path: '/admin/modules', icon: <Package size={18} /> },
         ];
       case UserRole.BUSINESS_OWNER:
         return [

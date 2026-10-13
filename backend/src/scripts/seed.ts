@@ -7,6 +7,7 @@ import { BusinessMembership } from '../models/BusinessMembership.js';
 import { RefreshSession } from '../models/RefreshSession.js';
 import { UserRole, AccountStatus, MembershipStatus } from '../types/index.js';
 import { seedCategoriesAndTypes } from './seedCategories.js';
+import { seedModuleCatalog } from './seedModules.js';
 
 async function seed() {
   console.log('🌱 Starting Flexora development seed script...');
@@ -104,6 +105,9 @@ async function seed() {
 
   // Seed business categories and types
   await seedCategoriesAndTypes();
+
+  // Seed module categories and reusable modules
+  await seedModuleCatalog();
 
   console.log('\n🎉 Flexora dev seed completed successfully!');
   console.log('----------------------------------------------------');

@@ -29,6 +29,21 @@ export enum CategoryStatus {
   INACTIVE = 'INACTIVE'
 }
 
+export enum ModuleStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  ARCHIVED = 'ARCHIVED'
+}
+
+export enum AuditAction {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  STATUS_CHANGE = 'STATUS_CHANGE',
+  DEPENDENCIES_UPDATE = 'DEPENDENCIES_UPDATE',
+  RECOMMENDATIONS_UPDATE = 'RECOMMENDATIONS_UPDATE',
+  DELETE = 'DELETE'
+}
+
 export interface IUser {
   id: string;
   email: string;
@@ -50,6 +65,7 @@ export interface IBusinessCategory {
   icon?: string;
   status: CategoryStatus;
   displayOrder: number;
+  businessTypeCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,9 +75,11 @@ export interface IBusinessType {
   name: string;
   slug: string;
   categoryId: string;
+  category?: IBusinessCategory;
   description?: string;
   status: CategoryStatus;
   isCustom: boolean;
+  businessCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -103,6 +121,51 @@ export interface IBusinessMembership {
   updatedAt: string;
 }
 
+export interface IModuleCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  icon?: string;
+  status: CategoryStatus;
+  displayOrder: number;
+  moduleCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IBusinessModule {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  icon?: string;
+  moduleCategoryId: string;
+  moduleCategory?: IModuleCategory;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  currency: string;
+  status: ModuleStatus;
+  dependencies: string[];
+  dependencyModules?: IBusinessModule[];
+  recommendedBusinessTypes: string[];
+  recommendedTypes?: IBusinessType[];
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IAuditLog {
+  id: string;
+  adminId: string;
+  adminEmail?: string;
+  action: AuditAction | string;
+  entityType: string;
+  entityId: string;
+  details?: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface AuthUserResponse {
   user: IUser;
   accessToken: string;
@@ -116,4 +179,14 @@ export interface AdminStatsResponse {
   staff: number;
   suspendedUsers: number;
   pendingUsers: number;
+  totalBusinessCategories?: number;
+  activeBusinessCategories?: number;
+  totalBusinessTypes?: number;
+  totalModuleCategories?: number;
+  totalModules?: number;
+  activeModules?: number;
+  inactiveModules?: number;
+  archivedModules?: number;
+  modulesWithDependencies?: number;
+  modulesWithoutRecommendations?: number;
 }
